@@ -100,6 +100,35 @@ Endpoint = {{host}}:{{wireguard_port}}
 {%     endif %}
 {%   endif %}
 {% endfor %}
+{% if wireguard_managed_clients is defined %}
+
+# Peers managed by Ansible from "wireguard_managed_clients" variable
+{%   for peer in wireguard_managed_clients.keys() %}
+[Peer]
+# {{ peer }}
+PublicKey = {{ hostvars[inventory_hostname]["wireguard__fact_public_key_" + peer] }}
+PresharedKey = {{ hostvars[inventory_hostname]["wireguard__fact_preshared_key_" + peer] }}
+{%     if wireguard_managed_clients[peer].wireguard_allowed_ips is defined %}
+AllowedIPs = {{ wireguard_managed_clients[peer].wireguard_allowed_ips }}
+{%     else %}
+{%       if wireguard_managed_clients[peer].wireguard_address is defined %}
+AllowedIPs = {{ wireguard_managed_clients[peer].wireguard_address.split('/')[0] }}/32
+{%       endif %}
+{%       if wireguard_managed_clients[peer].wireguard_addresses is defined %}
+{%         for wg_addr in wireguard_managed_clients[peer].wireguard_addresses %}
+{%           if (wg_addr | ansible.utils.ipv4) %}
+AllowedIPs = {{ wg_addr.split('/')[0] }}/32
+{%           elif (wg_addr | ansible.utils.ipv6) %}
+AllowedIPs = {{ wg_addr.split('/')[0] }}/128
+{%           endif %}
+{%         endfor %}
+{%       endif %}
+{%     endif %}
+{%     if wireguard_managed_clients[peer].persistent_keepalive is defined %}
+PersistentKeepalive = {{ wireguard_managed_clients[peer].persistent_keepalive }}
+{%     endif %}
+{%   endfor %}
+{% endif %}
 {% if wireguard_unmanaged_peers is defined %}
 
 # Peers not managed by Ansible from "wireguard_unmanaged_peers" variable

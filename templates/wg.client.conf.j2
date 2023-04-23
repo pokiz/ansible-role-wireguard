@@ -1,0 +1,82 @@
+#jinja2: lstrip_blocks:"True",trim_blocks:"True"
+{# Copyright (C) 2018-2022 Robert Wimmer
+ # SPDX-License-Identifier: GPL-3.0-or-later
+ #}
+# {{ ansible_managed }}
+
+[Interface]
+# {{ item.key }}
+
+{% if wireguard_managed_clients[item.key].wireguard_address is defined %}
+Address = {{ wireguard_managed_clients[item.key].wireguard_address }}
+{% endif %}
+{% if wireguard_managed_clients[item.key].wireguard_addresses is defined %}
+{%   for wg_addr in wireguard_managed_clients[peer].wireguard_addresses %}
+Address = {{ wg_addr }}
+{%   endfor %}
+{% endif %}
+PrivateKey = {{hostvars[inventory_hostname]["wireguard__fact_private_key_" + item.key]}}
+{% if wireguard_dns is defined %}
+DNS = {{ wireguard_dns }}
+{% endif %}
+{% if wireguard_fwmark is defined %}
+FwMark = {{ wireguard_fwmark }}
+{% endif %}
+{% if wireguard_mtu is defined %}
+MTU = {{ wireguard_mtu }}
+{% endif %}
+{% if wireguard_table is defined %}
+Table = {{ wireguard_table }}
+{% endif %}
+{% if wireguard_preup is defined %}
+{% for wg_preup in wireguard_preup %}
+PreUp = {{ wg_preup }}
+{% endfor %}
+{% endif %}
+{% if wireguard_postup is defined %}
+{% for wg_postup in wireguard_postup %}
+PostUp = {{ wg_postup }}
+{% endfor %}
+{% endif %}
+{% if wireguard_predown is defined %}
+{% for wg_predown in wireguard_predown %}
+PreDown = {{ wg_predown }}
+{% endfor %}
+{% endif %}
+{% if wireguard_postdown is defined %}
+{% for wg_postdown in wireguard_postdown %}
+PostDown = {{ wg_postdown }}
+{% endfor %}
+{% endif %}
+{% if wireguard_save_config is defined %}
+SaveConfig = {{ wireguard_save_config }}
+{% endif %}
+
+[Peer]
+# {{ inventory_hostname }}
+PublicKey = {{hostvars[inventory_hostname].wireguard__fact_public_key}}
+PresharedKey = {{hostvars[inventory_hostname]["wireguard__fact_preshared_key_" + item.key]}}
+{% if hostvars[inventory_hostname].wireguard_allowed_ips is defined %}
+AllowedIPs = {{hostvars[inventory_hostname].wireguard_allowed_ips}}
+{% else %}
+{%   if wireguard_address is defined %}
+AllowedIPs = {{ hostvars[inventory_hostname].wireguard_address.split('/')[0] }}/32
+{%   endif %}
+{%   if wireguard_addresses is defined %}
+{%     for wg_addr in hostvars[inventory_hostname].wireguard_addresses %}
+{%       if (wg_addr | ansible.utils.ipv4) %}
+AllowedIPs = {{ wg_addr.split('/')[0] }}/32
+{%       elif (wg_addr | ansible.utils.ipv6) %}
+AllowedIPs = {{ wg_addr.split('/')[0] }}/128
+{%       endif %}
+{%     endfor %}
+{%   endif %}
+{% endif %}
+{% if hostvars[inventory_hostname].wireguard_persistent_keepalive is defined %}
+PersistentKeepalive = {{hostvars[inventory_hostname].wireguard_persistent_keepalive}}
+{% endif %}
+{% if hostvars[inventory_hostname].wireguard_endpoint is defined and hostvars[inventory_hostname].wireguard_endpoint != "" %}
+Endpoint = {{hostvars[inventory_hostname].wireguard_endpoint}}:{{hostvars[inventory_hostname].wireguard_port | default(wireguard_port)}}
+{% else %}
+Endpoint = {{hostvars[inventory_hostname].ansible_host}}:{{hostvars[inventory_hostname].wireguard_port | default(wireguard_port)}}
+{% endif %}

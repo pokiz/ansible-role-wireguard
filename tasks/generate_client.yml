@@ -1,0 +1,98 @@
+---
+
+- local_action: file path=generated_clients state=directory mode=0700
+  no_log: '{{ ansible_verbosity < 3 }}'
+  become: no
+
+- name: Read current interface configuration
+  no_log: '{{ ansible_verbosity < 3 }}'
+  shell:
+    cmd: cat {{ wireguard_remote_directory }}/{{ wireguard_interface }}.conf || echo ""
+  register: interface_conf
+
+- name: "Set fact check client exist"
+  debug:
+    msg: "{{ interface_conf.stdout }}"
+
+- name: "Set fact check client exist"
+  no_log: '{{ ansible_verbosity < 3 }}'
+  set_fact:
+    client_exists: '{{ "# " + item.key in interface_conf.stdout_lines }}'
+
+- name: Set current public key (if client alredy exists)
+  when: client_exists
+  no_log: '{{ ansible_verbosity < 3 }}'
+  set_fact:
+    "wireguard__fact_public_key_{{ item.key }}": "{{ interface_conf.stdout | regex_search('\\[Peer\\]\n# ' + item.key + '\nPublicKey = (.+)\n', '\\1') | first }}"
+
+- name: Set current preshared key (if client already exists)
+  when: client_exists
+  no_log: '{{ ansible_verbosity < 3 }}'
+  set_fact:
+    "wireguard__fact_preshared_key_{{ item.key }}": "{{ interface_conf.stdout | regex_search('\\[Peer\\]\n# ' + item.key + '\nPublicKey = .+\nPresharedKey = (.+)', '\\1') | first }}"
+
+- name: Generate WireGuard preshared key
+  when: not client_exists
+  ansible.builtin.command: "wg genpsk"
+  register: "wireguard__register_preshared_key"
+  changed_when: false
+  no_log: '{{ ansible_verbosity < 3 }}'
+  tags:
+    - wg-generate-keys
+- local_action: copy content="{{ wireguard__register_preshared_key.stdout }}" dest="generated_clients/{{ item.key }}.pskey" mode=0600
+  when: not client_exists
+  become: no
+- name: Set preshared key fact
+  when: not client_exists
+  ansible.builtin.set_fact:
+    "wireguard__fact_preshared_key_{{ item.key }}": "{{ wireguard__register_preshared_key.stdout }}"
+  no_log: '{{ ansible_verbosity < 3 }}'
+  tags:
+    - wg-generate-keys
+
+- name: Generate WireGuard private key
+  when: not client_exists
+  ansible.builtin.command: "wg genkey"
+  register: "wireguard__register_private_key"
+  changed_when: false
+  no_log: '{{ ansible_verbosity < 3 }}'
+  tags:
+    - wg-generate-keys
+- local_action: copy content="{{ wireguard__register_private_key.stdout }}" dest="generated_clients/{{ item.key }}.key" mode=0600
+  when: not client_exists
+  no_log: '{{ ansible_verbosity < 3 }}'
+  become: no
+- name: Set private key fact
+  when: not client_exists
+  ansible.builtin.set_fact:
+    "wireguard__fact_private_key_{{ item.key }}": "{{ wireguard__register_private_key.stdout }}"
+  no_log: '{{ ansible_verbosity < 3 }}'
+  tags:
+    - wg-generate-keys
+
+- name: Derive WireGuard public key
+  when: not client_exists
+  ansible.builtin.command: "wg pubkey"
+  args:
+    stdin: "{{ hostvars[inventory_hostname]['wireguard__fact_private_key_' + item.key] }}"
+  register: "wireguard__register_public_key"
+  changed_when: false
+  check_mode: false
+  no_log: '{{ ansible_verbosity < 3 }}'
+  tags:
+    - wg-generate-keys
+- local_action: copy content="{{ wireguard__register_public_key.stdout }}" dest="generated_clients/{{ item.key }}.key.pub"  mode=0600
+  when: not client_exists
+  become: no
+- name: Set public key fact
+  when: not client_exists
+  ansible.builtin.set_fact:
+    "wireguard__fact_public_key_{{ item.key }}": "{{ wireguard__register_public_key.stdout }}"
+  no_log: '{{ ansible_verbosity < 3 }}'
+  tags:
+    - wg-generate-keys
+
+- local_action: ansible.builtin.template src=wg.client.conf.j2 dest=generated_clients/{{ item.key }}.wg.conf  mode=0600
+  when: not client_exists
+  no_log: '{{ ansible_verbosity < 3 }}'
+  become: no

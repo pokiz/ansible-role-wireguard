@@ -146,6 +146,13 @@
   tags:
     - wg-config
 
+- name: WireGuard managed clients handling (generates key and configuration)
+  when:
+    - wireguard_managed_clients is defined
+  include_tasks: generate_client.yml
+  no_log: '{{ ansible_verbosity < 3 }}'
+  loop: "{{ wireguard_managed_clients | dict2items }}"
+
 - name: Create WireGuard configuration directory
   ansible.builtin.file:
     dest: "{{ wireguard_remote_directory }}"
